@@ -1,0 +1,11 @@
+[package]
+name = "gardogs-agent"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "The Gardogs learner. Phase 0: a mask-driven random agent; DQN arrives in Phase 1."
+
+[dependencies]
+gardogs-env = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }

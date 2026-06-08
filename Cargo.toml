@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "gardogs-env",
+    "gardogs-agent",
+    "gardogs-viz",
+    "gardogs-cli",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+rust-version = "1.74"
+
+[workspace.dependencies]
+rand = "0.8"
+rand_chacha = "0.3"
+gardogs-env = { path = "gardogs-env" }
+gardogs-agent = { path = "gardogs-agent" }
