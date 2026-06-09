@@ -145,6 +145,72 @@ fn collie_slows_what_passes_it() {
 }
 
 #[test]
+fn mastiffs_with_a_collie_kill_a_postman() {
+    // Postmen (100 hp tanks) must be killable by the anti-tank combo: mastiffs
+    // holding a chokepoint with a collie slowing the target so it stays in range.
+    // This fails if the mastiff's range is too short to cover the path.
+    let mastiff = DogSpec {
+        name: "Mastiff",
+        cost: 120,
+        damage: 30.0,
+        range: 1.5,
+        fire_rate: 0.4,
+        target: Some(Target::Ground),
+        slow_factor: None,
+    };
+    let collie = DogSpec {
+        name: "Collie",
+        cost: 80,
+        damage: 0.0,
+        range: 2.0,
+        fire_rate: 0.0,
+        target: None,
+        slow_factor: Some(0.5),
+    };
+    let postman = EnemySpec {
+        name: "Postman",
+        health: 100.0,
+        speed: 0.5,
+        movement: Movement::Ground,
+        kill_reward: 15.0,
+        kill_money: 25,
+        lives_cost: 2,
+    };
+    let cfg = GameConfig {
+        grid: GridConfig {
+            width: 8,
+            height: 6,
+            path_row: 3,
+        },
+        tick_rate: 10.0,
+        start_money: 400,
+        start_lives: 1, // one postman through the door ends it
+        breather_s: 1.0,
+        dogs: vec![mastiff, collie],
+        enemies: vec![postman],
+        waves: vec![WaveSpec {
+            groups: vec![SpawnGroup {
+                enemy: 0,
+                count: 1,
+                spacing_s: 1.0,
+                start_s: 0.0,
+            }],
+        }],
+        max_tracked_enemies: 8,
+    };
+
+    let mut env = GardogsEnv::new(cfg);
+    for (dog, cell) in [(0, (1, 2)), (0, (3, 2)), (1, (2, 2))] {
+        let idx = env.place_index(dog, cell).unwrap();
+        env.step(env.decode(idx));
+    }
+    let env = run_to_end(env);
+
+    assert!(env.won(), "mastiffs + collie should bring down a postman");
+    assert_eq!(env.lives(), 1, "the postman must not reach the door");
+}
+
+#[test]
 fn phase2_observation_and_action_shapes() {
     use gardogs_env::ObsShape;
     let env = GardogsEnv::new(GameConfig::phase2());

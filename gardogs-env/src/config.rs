@@ -210,7 +210,11 @@ impl GameConfig {
                     name: "Mastiff",
                     cost: 120,
                     damage: 30.0,
-                    range: 1.0,
+                    // 03-game-rules.md lists 1.0, but buildable cells sit 1.0 cell
+                    // off the path, so a dog covers ±sqrt(range^2 - 1) of it: range
+                    // 1.0 grazes a single point and the anti-tank dog is useless.
+                    // Bumped so the Mastiff can actually hold a chokepoint.
+                    range: 1.5,
                     fire_rate: 0.4,
                     target: Some(Target::Ground),
                     slow_factor: None,
