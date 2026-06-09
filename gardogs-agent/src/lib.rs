@@ -1,9 +1,25 @@
 //! `gardogs-agent` — the learner.
 //!
-//! Phase 0 ships only [`RandomAgent`], a trivial policy that picks a uniformly
-//! random *legal* action via the environment's action mask. Its job is to drive
-//! the `reset`/`step` API end to end and prove a full game runs. The DQN learner
-//! (replay buffer, target network, ε-greedy) arrives in Phase 1.
+//! - [`RandomAgent`] — a trivial mask-driven policy (drove the Phase 0 loop).
+//! - [`Dqn`] — the Phase 1 Double-DQN learner (MLP, replay buffer, target
+//!   network, ε-greedy), with a [`train`] loop and greedy [`evaluate`].
+//!
+//! See `04-agent-and-training.md`.
+
+// The neural-net code uses explicit indexed loops over weight matrices (clearer
+// than iterator chains for `W[o*in+i]` addressing), and integer modulo for the
+// train/sync cadence (`is_multiple_of` needs a newer MSRV than we target).
+#![allow(clippy::needless_range_loop, clippy::manual_is_multiple_of)]
+
+mod dqn;
+mod nn;
+mod replay;
+mod train;
+
+pub use dqn::{Dqn, DqnConfig};
+pub use nn::{Adam, Mlp};
+pub use replay::{Replay, Transition};
+pub use train::{evaluate, train, Eval, TrainConfig, TrainReport};
 
 use gardogs_env::Observation;
 use rand::{Rng, SeedableRng};

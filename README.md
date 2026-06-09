@@ -10,23 +10,31 @@ waves of cats (and later postmen and seagulls), and a DQN agent learns to play
 | Crate            | Responsibility                                                      |
 |------------------|--------------------------------------------------------------------|
 | `gardogs-env`    | The game: rules, waves, economy, the `reset`/`step` API. Deterministic, headless. |
-| `gardogs-agent`  | The learner. Phase 0: a mask-driven random agent. DQN in Phase 1.  |
+| `gardogs-agent`  | The learner: a hand-rolled MLP, replay buffer, and a Double-DQN training loop. |
 | `gardogs-viz`    | The renderer/viewer. Placeholder until Phase 4.                    |
-| `gardogs-cli`    | Driver binary (`gardogs`) for running / evaluating games.          |
+| `gardogs-cli`    | Driver binary (`gardogs`) for playing, training, and evaluating.   |
 
-## Status: Phase 0 complete
+## Status: Phase 1 complete
 
-The skeleton and the environment API are real. `gardogs-env` implements the
-Phase-1 rules (8×6 garden, one straight path, terriers vs cats, three starter
-waves, the economy, win/lose), it is deterministic given a seed, and a random
-agent drives a full game end to end. No learning yet — that's Phase 1.
+The agent teaches itself to defend. `gardogs-env` implements the Phase-1 rules
+(8×6 garden, one straight path, terriers vs cats, three starter waves, the
+economy, win/lose), deterministic given a seed. `gardogs-agent` is a Double DQN —
+MLP with manual backprop + Adam, experience replay, a target network, ε-greedy
+exploration and gradient clipping — that learns, from the score alone, to place
+dogs and survive the waves, reaching a 100% win rate from the random baseline.
 
 ## Try it
 
 ```sh
-# Run one full game with the random agent (it loses — there's no learning yet).
+# Train a DQN on Phase 1 and save a checkpoint (a few minutes on CPU).
+cargo run --release -p gardogs-cli -- train --seed 0 --episodes 600 --out phase1.ckpt
+
+# Evaluate a saved checkpoint (greedy play: win rate / avg reward).
+cargo run --release -p gardogs-cli -- eval --checkpoint phase1.ckpt --games 100
+
+# Watch the random baseline lose, for contrast.
 cargo run -p gardogs-cli -- play --seed 1 --agent-seed 1
 
-# Run the tests (movement, firing, economy, win/lose, determinism).
+# Run the tests (env rules + determinism; backprop, checkpointing, learning).
 cargo test
 ```

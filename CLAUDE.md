@@ -39,6 +39,21 @@ cargo fmt --check
 
 - **Phase 0 (done):** workspace, the four crates, `gardogs-env` Phase-1 rules,
   random agent, determinism + unit tests.
-- **Phase 1 (next):** the DQN learner in `gardogs-agent` (MLP, replay buffer,
-  target net, ε-greedy, Double DQN) on the compact-vector observation; train
-  terriers-vs-cats until the reward curve trends up. See `04-agent-and-training.md`.
+- **Phase 1 (done):** the DQN learner in `gardogs-agent` — a hand-rolled MLP with
+  manual backprop + Adam (`nn.rs`), experience replay (`replay.rs`), a Double-DQN
+  agent with a target net, ε-greedy and gradient clipping (`dqn.rs`), and a
+  training loop with greedy eval and best-checkpoint tracking (`train.rs`). Trains
+  terriers-vs-cats to a 100% win rate; the reward curve trends up from the random
+  baseline. Drive it with `gardogs train` / `gardogs eval`.
+- **Phase 2 (next):** enemy and dog variety — postmen and seagulls; mastiff,
+  collie, German shepherd; `ground`/`air`/`both` targeting and the collie's slow
+  (the env already models these); mixed, escalating waves; retrain until the agent
+  fields differentiated, threat-specific defences. See `05-roadmap-phases.md`.
+
+## Note on the learner
+
+The net is hand-rolled in plain Rust (no `burn` yet): tiny, dependency-free, and
+fully deterministic (every RNG seeded by us). DQN training is noisy and can
+transiently forget, so `train()` keeps the best-evaluated network and restores it
+at the end. If/when the spatial CNN phase (Phase 3) wants it, swapping in `burn`
+is a localised change inside `gardogs-agent`.

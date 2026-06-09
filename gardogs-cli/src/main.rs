@@ -1,114 +1,200 @@
 //! Thin driver binary for Gardogs.
 //!
-//! Phase 0 provides one verb, `play`: run a full Phase-1 game headless with the
-//! random agent and print a summary, proving the `reset`/`step` loop end to end.
-//! `train` / `eval` / `watch` (`01-architecture.md`) arrive in later phases.
+//! Verbs:
+//!   - `play`  — run a full game with the random agent (Phase 0 smoke test).
+//!   - `train` — train a DQN on the Phase-1 rules; optionally save a checkpoint.
+//!   - `eval`  — play games greedily with a saved checkpoint and report metrics.
+//!
+//! `watch` (the live viewer) arrives in Phase 4.
 
 use std::process::ExitCode;
 
-use gardogs_agent::{Policy, RandomAgent};
+use gardogs_agent::{evaluate, train, Dqn, DqnConfig, Policy, RandomAgent, TrainConfig};
 use gardogs_env::{Env, GameConfig, GardogsEnv};
 
-struct Args {
-    seed: u64,
-    agent_seed: u64,
-    max_ticks: u64,
-}
-
-fn parse_args() -> Result<Args, String> {
-    let mut args = Args {
-        seed: 0,
-        agent_seed: 0,
-        max_ticks: 100_000,
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (verb, rest) = match args.split_first() {
+        Some((v, r)) if !v.starts_with('-') => (v.as_str(), r),
+        _ => ("play", &args[..]), // default verb
     };
-    let mut it = std::env::args().skip(1).peekable();
 
-    // Optional leading verb; only `play` is supported in Phase 0.
-    if let Some(first) = it.peek() {
-        if !first.starts_with('-') {
-            let verb = it.next().unwrap();
-            if verb != "play" {
-                return Err(format!(
-                    "unknown command '{verb}' (only 'play' is supported)"
-                ));
-            }
+    let result = match verb {
+        "play" => cmd_play(rest),
+        "train" => cmd_train(rest),
+        "eval" => cmd_eval(rest),
+        "-h" | "--help" | "help" => {
+            usage();
+            return ExitCode::SUCCESS;
+        }
+        other => Err(format!("unknown command '{other}'")),
+    };
+
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}\n");
+            usage();
+            ExitCode::from(2)
         }
     }
-
-    while let Some(flag) = it.next() {
-        let mut value = || {
-            it.next()
-                .ok_or_else(|| format!("missing value for {flag}"))
-                .and_then(|v| {
-                    v.parse::<u64>()
-                        .map_err(|_| format!("invalid number for {flag}: {v}"))
-                })
-        };
-        match flag.as_str() {
-            "--seed" => args.seed = value()?,
-            "--agent-seed" => args.agent_seed = value()?,
-            "--max-ticks" => args.max_ticks = value()?,
-            "-h" | "--help" => return Err("help".into()),
-            other => return Err(format!("unknown argument '{other}'")),
-        }
-    }
-    Ok(args)
 }
 
 fn usage() {
     eprintln!(
-        "gardogs play [--seed N] [--agent-seed N] [--max-ticks N]\n\
+        "gardogs <command> [options]\n\
          \n\
-         Runs one full Phase-1 game with the random agent and prints a summary."
+         commands:\n  \
+           play   [--seed N] [--agent-seed N] [--max-ticks N]\n  \
+           train  [--seed N] [--episodes N] [--out PATH] [--log PATH] [--quiet]\n  \
+           eval   --checkpoint PATH [--games N] [--seed N]\n"
     );
 }
 
-fn main() -> ExitCode {
-    let args = match parse_args() {
-        Ok(a) => a,
-        Err(e) => {
-            if e != "help" {
-                eprintln!("error: {e}\n");
-            }
-            usage();
-            return if e == "help" {
-                ExitCode::SUCCESS
+/// Minimal flag parser: pulls `--flag value` pairs into a small lookup.
+struct Flags {
+    map: std::collections::HashMap<String, String>,
+}
+
+impl Flags {
+    fn parse(args: &[String]) -> Result<Flags, String> {
+        let mut map = std::collections::HashMap::new();
+        let mut it = args.iter();
+        while let Some(flag) = it.next() {
+            let key = flag
+                .strip_prefix("--")
+                .ok_or_else(|| format!("expected a flag, got '{flag}'"))?;
+            if key == "quiet" {
+                map.insert(key.to_string(), "1".to_string());
             } else {
-                ExitCode::from(2)
-            };
+                let val = it
+                    .next()
+                    .ok_or_else(|| format!("missing value for --{key}"))?;
+                map.insert(key.to_string(), val.clone());
+            }
         }
-    };
+        Ok(Flags { map })
+    }
+
+    fn get_u64(&self, key: &str, default: u64) -> Result<u64, String> {
+        match self.map.get(key) {
+            Some(v) => v
+                .parse()
+                .map_err(|_| format!("invalid number for --{key}: {v}")),
+            None => Ok(default),
+        }
+    }
+    fn get_str(&self, key: &str) -> Option<&str> {
+        self.map.get(key).map(String::as_str)
+    }
+    fn has(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
+}
+
+fn cmd_play(args: &[String]) -> Result<(), String> {
+    let f = Flags::parse(args)?;
+    let seed = f.get_u64("seed", 0)?;
+    let agent_seed = f.get_u64("agent-seed", 0)?;
+    let max_ticks = f.get_u64("max-ticks", 100_000)?;
 
     let mut env = GardogsEnv::new(GameConfig::phase1());
-    let mut agent = RandomAgent::new(args.agent_seed);
-    let mut obs = env.reset(args.seed);
+    let mut agent = RandomAgent::new(agent_seed);
+    let mut obs = env.reset(seed);
 
     let mut steps = 0u64;
     let (info, done) = loop {
         let mask = env.action_mask();
-        let action_idx = agent.act(&obs, &mask);
-        let action = env.decode(action_idx);
+        let action = env.decode(agent.act(&obs, &mask));
         let sr = env.step(action);
         obs = sr.obs;
         steps += 1;
-        if sr.done || steps >= args.max_ticks {
+        if sr.done || steps >= max_ticks {
             break (sr.info, sr.done);
         }
     };
 
-    let outcome = if info.won {
+    let outcome = outcome_str(info.won, done);
+    println!("seed={seed} agent_seed={agent_seed}");
+    println!(
+        "ticks={} wave={} score={:.1} money={} lives={} -> {}",
+        info.tick, info.wave, info.score, info.money, info.lives, outcome
+    );
+    Ok(())
+}
+
+fn cmd_train(args: &[String]) -> Result<(), String> {
+    let f = Flags::parse(args)?;
+    let seed = f.get_u64("seed", 0)?;
+    let episodes = f.get_u64("episodes", 2_000)? as usize;
+    let out = f.get_str("out").map(str::to_string);
+    let log = f.get_str("log").map(str::to_string);
+
+    let env_cfg = GameConfig::phase1();
+    let train_cfg = TrainConfig {
+        episodes,
+        verbose: !f.has("quiet"),
+        log_path: log,
+        ..TrainConfig::default()
+    };
+
+    eprintln!("training DQN on Phase 1 (seed={seed}, episodes={episodes})...");
+    let (agent, report) = train(env_cfg.clone(), DqnConfig::default(), train_cfg, seed);
+
+    let final_eval = evaluate(&agent, &env_cfg, 100, 2_000_000);
+    println!(
+        "final (greedy, 100 games): win {:.1}% | avg_reward {:.2} | avg_waves {:.2}",
+        final_eval.win_rate * 100.0,
+        final_eval.avg_reward,
+        final_eval.avg_waves
+    );
+
+    let first = report.episode_rewards.first().copied().unwrap_or(0.0);
+    let last = report
+        .episode_rewards
+        .iter()
+        .rev()
+        .take(50)
+        .copied()
+        .sum::<f32>()
+        / 50.0_f32.min(report.episode_rewards.len() as f32);
+    println!("episode reward: first={first:.1} -> last50_avg={last:.1}");
+
+    if let Some(path) = out {
+        agent
+            .save(&path)
+            .map_err(|e| format!("failed to save checkpoint: {e}"))?;
+        println!("saved checkpoint to {path}");
+    }
+    Ok(())
+}
+
+fn cmd_eval(args: &[String]) -> Result<(), String> {
+    let f = Flags::parse(args)?;
+    let checkpoint = f
+        .get_str("checkpoint")
+        .ok_or("eval requires --checkpoint PATH")?;
+    let games = f.get_u64("games", 100)? as usize;
+    let seed = f.get_u64("seed", 2_000_000)?;
+
+    let agent = Dqn::load_for_eval(checkpoint)
+        .map_err(|e| format!("failed to load checkpoint '{checkpoint}': {e}"))?;
+    let ev = evaluate(&agent, &GameConfig::phase1(), games, seed);
+    println!(
+        "eval ({games} games): win {:.1}% | avg_reward {:.2} | avg_waves {:.2}",
+        ev.win_rate * 100.0,
+        ev.avg_reward,
+        ev.avg_waves
+    );
+    Ok(())
+}
+
+fn outcome_str(won: bool, done: bool) -> &'static str {
+    if won {
         "WIN"
     } else if done {
         "LOSE"
     } else {
         "TIMEOUT"
-    };
-
-    println!("seed={} agent_seed={}", args.seed, args.agent_seed);
-    println!(
-        "ticks={} wave={} score={:.1} money={} lives={} -> {}",
-        info.tick, info.wave, info.score, info.money, info.lives, outcome
-    );
-
-    ExitCode::SUCCESS
+    }
 }
