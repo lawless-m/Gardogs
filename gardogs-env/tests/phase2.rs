@@ -145,6 +145,57 @@ fn collie_slows_what_passes_it() {
 }
 
 #[test]
+fn one_shepherd_downs_seagulls() {
+    // A single German Shepherd (the real Phase 2 stats) must be a viable air
+    // answer: seagulls are fast and only sit in range briefly, so the shepherd's
+    // damage has to be enough to drop one per pass. If it can't, air defence
+    // needs multiple overlapping shepherds and the agent never learns it.
+    let shepherd = DogSpec {
+        name: "German Shepherd",
+        cost: 110,
+        damage: 16.0,
+        range: 1.5,
+        fire_rate: 0.8,
+        target: Some(Target::Both),
+        slow_factor: None,
+    };
+    // Two seagulls; leaking both (2 lives each) would exceed the budget.
+    let cfg = GameConfig {
+        grid: GridConfig {
+            width: 8,
+            height: 6,
+            path_row: 3,
+        },
+        tick_rate: 10.0,
+        start_money: 200,
+        start_lives: 3,
+        breather_s: 1.0,
+        dogs: vec![shepherd],
+        enemies: vec![EnemySpec {
+            lives_cost: 2,
+            ..seagull()
+        }],
+        waves: vec![WaveSpec {
+            groups: vec![SpawnGroup {
+                enemy: 0,
+                count: 2,
+                spacing_s: 2.5,
+                start_s: 0.0,
+            }],
+        }],
+        max_tracked_enemies: 8,
+    };
+
+    let mut env = GardogsEnv::new(cfg);
+    let p = env.place_index(0, (1, 2)).unwrap();
+    env.step(env.decode(p));
+    let env = run_to_end(env);
+
+    assert!(env.won(), "one shepherd should clear the seagulls");
+    assert_eq!(env.lives(), 3, "no seagull should have leaked");
+}
+
+#[test]
 fn mastiffs_with_a_collie_kill_a_postman() {
     // Postmen (100 hp tanks) must be killable by the anti-tank combo: mastiffs
     // holding a chokepoint with a collie slowing the target so it stays in range.

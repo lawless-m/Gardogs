@@ -241,7 +241,13 @@ impl GameConfig {
                 DogSpec {
                     name: "German Shepherd",
                     cost: 110,
-                    damage: 12.0,
+                    // 03-game-rules.md lists 12, but a seagull (15 hp, fast) only
+                    // sits in range for ~1.2 shots, so at 12 a single shepherd
+                    // can't actually down one — air defence needed two overlapping
+                    // shepherds, too hard to discover. 16 lets one shepherd reliably
+                    // one-shot a seagull, making air defence a viable single-dog
+                    // answer the agent can learn.
+                    damage: 16.0,
                     range: 1.5,
                     fire_rate: 0.8,
                     target: Some(Target::Both),
