@@ -24,6 +24,11 @@ pub struct TrainConfig {
     pub verbose: bool,
     /// Optional CSV reward log (`episode,env_step,epsilon,episode_reward`).
     pub log_path: Option<String>,
+    /// Optional reward shaping: add `reward_shaping * damage_dealt` to the reward
+    /// the agent *learns* from (densifies the signal for hard exploration). The
+    /// reported episode reward and all evaluation stay on the canonical reward,
+    /// so metrics remain comparable. 0.0 disables it. See `04-agent-and-training.md`.
+    pub reward_shaping: f32,
 }
 
 impl Default for TrainConfig {
@@ -35,6 +40,7 @@ impl Default for TrainConfig {
             max_steps_per_episode: 5_000,
             verbose: true,
             log_path: None,
+            reward_shaping: 0.0,
         }
     }
 }
@@ -95,10 +101,13 @@ pub fn train(
             let sr = env.step(env.decode(action_idx));
             let next_mask = env.action_mask();
 
+            // The agent learns from an optionally-shaped reward; metrics use the
+            // canonical one (`ep_reward`), so evaluation stays comparable.
+            let learn_reward = sr.reward + train_cfg.reward_shaping * sr.info.damage_dealt;
             agent.observe(Transition {
                 state: std::mem::take(&mut obs.data),
                 action: action_idx,
-                reward: sr.reward,
+                reward: learn_reward,
                 next_state: sr.obs.data.clone(),
                 done: sr.done,
                 next_mask: next_mask.clone(),

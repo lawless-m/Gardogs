@@ -148,15 +148,31 @@ fn cmd_train(args: &[String]) -> Result<(), String> {
 
     let cfg_name = f.get_str("config").unwrap_or("phase2").to_string();
     let env_cfg = f.config()?;
+
+    // Phase 2 is a harder exploration problem (161 actions, sparse delayed
+    // reward), so it gets longer exploration and a small damage-shaping signal;
+    // Phase 1 keeps the plain defaults that already win.
+    let (dqn_cfg, shaping) = match cfg_name.as_str() {
+        "phase2" => (
+            DqnConfig {
+                eps_decay_steps: 150_000,
+                ..DqnConfig::default()
+            },
+            0.05,
+        ),
+        _ => (DqnConfig::default(), 0.0),
+    };
+
     let train_cfg = TrainConfig {
         episodes,
         verbose: !f.has("quiet"),
         log_path: log,
+        reward_shaping: shaping,
         ..TrainConfig::default()
     };
 
     eprintln!("training DQN on {cfg_name} (seed={seed}, episodes={episodes})...");
-    let (agent, report) = train(env_cfg.clone(), DqnConfig::default(), train_cfg, seed);
+    let (agent, report) = train(env_cfg.clone(), dqn_cfg, train_cfg, seed);
 
     let final_eval = evaluate(&agent, &env_cfg, 100, 2_000_000);
     println!(

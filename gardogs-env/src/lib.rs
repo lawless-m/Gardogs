@@ -65,6 +65,9 @@ pub struct Info {
     pub tick: u64,
     pub enemies_active: usize,
     pub won: bool,
+    /// Damage dogs dealt to enemies this tick. Diagnostic only — not part of the
+    /// canonical reward; training may use it for optional shaping.
+    pub damage_dealt: f32,
 }
 
 /// The contract between the game and the learner (`02-environment-api.md`).

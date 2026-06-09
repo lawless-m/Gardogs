@@ -68,6 +68,10 @@ pub struct GardogsEnv {
     won: bool,
     tick: u64,
     cumulative: f32,
+    /// Total damage dogs dealt to enemies in the most recent tick. A diagnostic
+    /// (it is not part of the canonical reward); training may use it for optional
+    /// shaping. See `04-agent-and-training.md`.
+    last_damage_dealt: f32,
 
     /// Seeded per `reset`. Reserved for future stochastic rules; the Phase 1
     /// rules are fully deterministic without it.
@@ -117,6 +121,7 @@ impl GardogsEnv {
             won: false,
             tick: 0,
             cumulative: 0.0,
+            last_damage_dealt: 0.0,
             rng: ChaCha8Rng::seed_from_u64(0),
         };
         env.reset(0);
@@ -174,6 +179,7 @@ impl GardogsEnv {
             tick: self.tick,
             enemies_active: self.enemies.len(),
             won: self.won,
+            damage_dealt: self.last_damage_dealt,
         }
     }
 
@@ -186,6 +192,7 @@ impl GardogsEnv {
         let width = cfg.grid.width as f32;
         let path_row = cfg.grid.path_row as f32;
         let mut reward = 0.0f32;
+        self.last_damage_dealt = 0.0;
 
         // 1. Spawn any enemies due this tick.
         if let Phase::Spawning = self.phase {
@@ -244,6 +251,8 @@ impl GardogsEnv {
             }
 
             if let Some(ei) = best {
+                // Count damage actually dealt (no overkill) for optional shaping.
+                self.last_damage_dealt += damage.min(self.enemies[ei].health.max(0.0));
                 self.enemies[ei].health -= damage;
                 if self.enemies[ei].health <= 0.0 {
                     let espec = &cfg.enemies[self.enemies[ei].spec];
@@ -430,6 +439,7 @@ impl Env for GardogsEnv {
         self.won = false;
         self.tick = 0;
         self.cumulative = 0.0;
+        self.last_damage_dealt = 0.0;
         self.build_obs()
     }
 
