@@ -193,7 +193,12 @@ impl GameConfig {
                 path_row: 3,
             },
             tick_rate: 10.0,
-            start_money: 120,
+            // Economy tuned (03-game-rules.md's first knob) so a good player can
+            // afford *both* an air answer (shepherds) and a tank answer (mastiff
+            // + collie) in time: with the tighter original numbers the tank dogs
+            // were unaffordable exactly when the postmen arrived, capping play at
+            // wave 2. Kill money is richer below to keep the tempo flowing.
+            start_money: 200,
             start_lives: 12,
             breather_s: 4.0,
             dogs: vec![
@@ -245,7 +250,7 @@ impl GameConfig {
                     speed: 1.0,
                     movement: Movement::Ground,
                     kill_reward: 5.0,
-                    kill_money: 10,
+                    kill_money: 12,
                     lives_cost: 1,
                 },
                 EnemySpec {
@@ -254,7 +259,7 @@ impl GameConfig {
                     speed: 0.5,
                     movement: Movement::Ground,
                     kill_reward: 15.0,
-                    kill_money: 25,
+                    kill_money: 40,
                     lives_cost: 2,
                 },
                 EnemySpec {
@@ -263,7 +268,7 @@ impl GameConfig {
                     speed: 1.5,
                     movement: Movement::Air,
                     kill_reward: 8.0,
-                    kill_money: 12,
+                    kill_money: 18,
                     lives_cost: 1,
                 },
             ],
