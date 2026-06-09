@@ -2,14 +2,14 @@
 //!
 //! Verbs:
 //!   - `play`  — run a full game with the random agent (Phase 0 smoke test).
-//!   - `train` — train a DQN on the Phase-1 rules; optionally save a checkpoint.
+//!   - `train` — train a DQN on the chosen rules; optionally save a checkpoint.
 //!   - `eval`  — play games greedily with a saved checkpoint and report metrics.
 //!
 //! `watch` (the live viewer) arrives in Phase 4.
 
 use std::process::ExitCode;
 
-use gardogs_agent::{evaluate, train, Dqn, DqnConfig, Policy, RandomAgent, TrainConfig};
+use gardogs_agent::{dog_usage, evaluate, train, Dqn, DqnConfig, Policy, RandomAgent, TrainConfig};
 use gardogs_env::{Env, GameConfig, GardogsEnv};
 
 fn main() -> ExitCode {
@@ -45,10 +45,23 @@ fn usage() {
         "gardogs <command> [options]\n\
          \n\
          commands:\n  \
-           play   [--seed N] [--agent-seed N] [--max-ticks N]\n  \
-           train  [--seed N] [--episodes N] [--out PATH] [--log PATH] [--quiet]\n  \
-           eval   --checkpoint PATH [--games N] [--seed N]\n"
+           play   [--config phase1|phase2] [--seed N] [--agent-seed N] [--max-ticks N]\n  \
+           train  [--config phase1|phase2] [--seed N] [--episodes N] [--out PATH] [--log PATH] [--quiet]\n  \
+           eval   --checkpoint PATH [--config phase1|phase2] [--games N] [--seed N]\n\
+         \n\
+         --config defaults to phase2.\n"
     );
+}
+
+/// Select a built-in game config by name.
+fn config_by_name(name: &str) -> Result<GameConfig, String> {
+    match name {
+        "phase1" => Ok(GameConfig::phase1()),
+        "phase2" => Ok(GameConfig::phase2()),
+        other => Err(format!(
+            "unknown --config '{other}' (expected phase1 or phase2)"
+        )),
+    }
 }
 
 /// Minimal flag parser: pulls `--flag value` pairs into a small lookup.
@@ -90,6 +103,9 @@ impl Flags {
     fn has(&self, key: &str) -> bool {
         self.map.contains_key(key)
     }
+    fn config(&self) -> Result<GameConfig, String> {
+        config_by_name(self.get_str("config").unwrap_or("phase2"))
+    }
 }
 
 fn cmd_play(args: &[String]) -> Result<(), String> {
@@ -98,7 +114,7 @@ fn cmd_play(args: &[String]) -> Result<(), String> {
     let agent_seed = f.get_u64("agent-seed", 0)?;
     let max_ticks = f.get_u64("max-ticks", 100_000)?;
 
-    let mut env = GardogsEnv::new(GameConfig::phase1());
+    let mut env = GardogsEnv::new(f.config()?);
     let mut agent = RandomAgent::new(agent_seed);
     let mut obs = env.reset(seed);
 
@@ -130,7 +146,8 @@ fn cmd_train(args: &[String]) -> Result<(), String> {
     let out = f.get_str("out").map(str::to_string);
     let log = f.get_str("log").map(str::to_string);
 
-    let env_cfg = GameConfig::phase1();
+    let cfg_name = f.get_str("config").unwrap_or("phase2").to_string();
+    let env_cfg = f.config()?;
     let train_cfg = TrainConfig {
         episodes,
         verbose: !f.has("quiet"),
@@ -138,7 +155,7 @@ fn cmd_train(args: &[String]) -> Result<(), String> {
         ..TrainConfig::default()
     };
 
-    eprintln!("training DQN on Phase 1 (seed={seed}, episodes={episodes})...");
+    eprintln!("training DQN on {cfg_name} (seed={seed}, episodes={episodes})...");
     let (agent, report) = train(env_cfg.clone(), DqnConfig::default(), train_cfg, seed);
 
     let final_eval = evaluate(&agent, &env_cfg, 100, 2_000_000);
@@ -160,6 +177,19 @@ fn cmd_train(args: &[String]) -> Result<(), String> {
         / 50.0_f32.min(report.episode_rewards.len() as f32);
     println!("episode reward: first={first:.1} -> last50_avg={last:.1}");
 
+    // What the trained agent actually fields (evidence of differentiated play).
+    let usage = dog_usage(&agent, &env_cfg, 2_000_000);
+    let composition: Vec<String> = env_cfg
+        .dogs
+        .iter()
+        .zip(&usage)
+        .filter(|(_, &n)| n > 0)
+        .map(|(d, n)| format!("{}×{n}", d.name))
+        .collect();
+    if !composition.is_empty() {
+        println!("dog usage (one greedy game): {}", composition.join(", "));
+    }
+
     if let Some(path) = out {
         agent
             .save(&path)
@@ -179,7 +209,7 @@ fn cmd_eval(args: &[String]) -> Result<(), String> {
 
     let agent = Dqn::load_for_eval(checkpoint)
         .map_err(|e| format!("failed to load checkpoint '{checkpoint}': {e}"))?;
-    let ev = evaluate(&agent, &GameConfig::phase1(), games, seed);
+    let ev = evaluate(&agent, &f.config()?, games, seed);
     println!(
         "eval ({games} games): win {:.1}% | avg_reward {:.2} | avg_waves {:.2}",
         ev.win_rate * 100.0,

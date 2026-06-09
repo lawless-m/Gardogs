@@ -157,6 +157,201 @@ impl GameConfig {
         }
     }
 
+    /// The Phase 2 game from `03-game-rules.md`: the full bestiary and dog roster
+    /// on the same 8×6 garden, with mixed, escalating waves — including waves
+    /// where ground-only defence fails because seagulls come over the top.
+    ///
+    /// Enemy indices: 0 = cat, 1 = postman, 2 = seagull.
+    /// Dog indices:   0 = terrier, 1 = mastiff, 2 = collie, 3 = german shepherd.
+    ///
+    /// Every number is a first guess to tune by training (the roadmap calls the
+    /// wave scripts "a tuning exercise"); balance lives here, not in `game.rs`.
+    pub fn phase2() -> Self {
+        let cat = SpawnGroup {
+            enemy: 0,
+            count: 0,
+            spacing_s: 0.0,
+            start_s: 0.0,
+        };
+        let postman = SpawnGroup {
+            enemy: 1,
+            count: 0,
+            spacing_s: 0.0,
+            start_s: 0.0,
+        };
+        let seagull = SpawnGroup {
+            enemy: 2,
+            count: 0,
+            spacing_s: 0.0,
+            start_s: 0.0,
+        };
+
+        GameConfig {
+            grid: GridConfig {
+                width: 8,
+                height: 6,
+                path_row: 3,
+            },
+            tick_rate: 10.0,
+            start_money: 120,
+            start_lives: 12,
+            breather_s: 4.0,
+            dogs: vec![
+                DogSpec {
+                    name: "Terrier",
+                    cost: 50,
+                    damage: 5.0,
+                    range: 1.5,
+                    fire_rate: 1.0,
+                    target: Some(Target::Ground),
+                    slow_factor: None,
+                },
+                DogSpec {
+                    name: "Mastiff",
+                    cost: 120,
+                    damage: 30.0,
+                    range: 1.0,
+                    fire_rate: 0.4,
+                    target: Some(Target::Ground),
+                    slow_factor: None,
+                },
+                DogSpec {
+                    name: "Border Collie",
+                    cost: 80,
+                    damage: 0.0,
+                    range: 2.0,
+                    fire_rate: 0.0,
+                    target: None,
+                    slow_factor: Some(0.5),
+                },
+                DogSpec {
+                    name: "German Shepherd",
+                    cost: 110,
+                    damage: 12.0,
+                    range: 1.5,
+                    fire_rate: 0.8,
+                    target: Some(Target::Both),
+                    slow_factor: None,
+                },
+            ],
+            enemies: vec![
+                EnemySpec {
+                    name: "Cat",
+                    health: 20.0,
+                    speed: 1.0,
+                    movement: Movement::Ground,
+                    kill_reward: 5.0,
+                    kill_money: 10,
+                    lives_cost: 1,
+                },
+                EnemySpec {
+                    name: "Postman",
+                    health: 100.0,
+                    speed: 0.5,
+                    movement: Movement::Ground,
+                    kill_reward: 15.0,
+                    kill_money: 25,
+                    lives_cost: 2,
+                },
+                EnemySpec {
+                    name: "Seagull",
+                    health: 15.0,
+                    speed: 1.5,
+                    movement: Movement::Air,
+                    kill_reward: 8.0,
+                    kill_money: 12,
+                    lives_cost: 1,
+                },
+            ],
+            waves: vec![
+                // 1: cats only — warm up and earn a little money.
+                WaveSpec {
+                    groups: vec![SpawnGroup {
+                        count: 6,
+                        spacing_s: 1.5,
+                        ..cat
+                    }],
+                },
+                // 2: cats plus seagulls over the top — a ground-only defence leaks.
+                WaveSpec {
+                    groups: vec![
+                        SpawnGroup {
+                            count: 6,
+                            spacing_s: 1.5,
+                            ..cat
+                        },
+                        SpawnGroup {
+                            count: 3,
+                            spacing_s: 2.5,
+                            start_s: 3.0,
+                            ..seagull
+                        },
+                    ],
+                },
+                // 3: cats and the first postmen — tanks that soak damage.
+                WaveSpec {
+                    groups: vec![
+                        SpawnGroup {
+                            count: 8,
+                            spacing_s: 1.2,
+                            ..cat
+                        },
+                        SpawnGroup {
+                            count: 2,
+                            spacing_s: 4.0,
+                            start_s: 1.0,
+                            ..postman
+                        },
+                    ],
+                },
+                // 4: postmen up the path while seagulls come over — needs both answers.
+                WaveSpec {
+                    groups: vec![
+                        SpawnGroup {
+                            count: 8,
+                            spacing_s: 1.2,
+                            ..cat
+                        },
+                        SpawnGroup {
+                            count: 3,
+                            spacing_s: 3.5,
+                            start_s: 1.0,
+                            ..postman
+                        },
+                        SpawnGroup {
+                            count: 4,
+                            spacing_s: 2.0,
+                            start_s: 4.0,
+                            ..seagull
+                        },
+                    ],
+                },
+                // 5: the finale — everything at once, faster.
+                WaveSpec {
+                    groups: vec![
+                        SpawnGroup {
+                            count: 10,
+                            spacing_s: 1.0,
+                            ..cat
+                        },
+                        SpawnGroup {
+                            count: 4,
+                            spacing_s: 3.0,
+                            ..postman
+                        },
+                        SpawnGroup {
+                            count: 5,
+                            spacing_s: 1.8,
+                            start_s: 3.0,
+                            ..seagull
+                        },
+                    ],
+                },
+            ],
+            max_tracked_enemies: 10,
+        }
+    }
+
     /// A tiny, deterministic scenario used by the tests: a single short wave and a
     /// one-shot dog, so win/lose/firing outcomes are easy to assert. Two starting
     /// lives so an undefended run loses quickly.

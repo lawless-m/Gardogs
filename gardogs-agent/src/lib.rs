@@ -19,7 +19,7 @@ mod train;
 pub use dqn::{Dqn, DqnConfig};
 pub use nn::{Adam, Mlp};
 pub use replay::{Replay, Transition};
-pub use train::{evaluate, train, Eval, TrainConfig, TrainReport};
+pub use train::{dog_usage, evaluate, train, Eval, TrainConfig, TrainReport};
 
 use gardogs_env::Observation;
 use rand::{Rng, SeedableRng};

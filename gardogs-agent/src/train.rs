@@ -6,7 +6,7 @@
 
 use std::io::Write;
 
-use gardogs_env::{Env, GameConfig, GardogsEnv};
+use gardogs_env::{Action, Env, GameConfig, GardogsEnv};
 
 use crate::dqn::{Dqn, DqnConfig};
 use crate::replay::Transition;
@@ -215,6 +215,31 @@ pub fn evaluate(agent: &Dqn, env_cfg: &GameConfig, games: usize, seed_base: u64)
         win_rate: wins as f32 / n,
         avg_waves: total_waves as f32 / n,
     }
+}
+
+/// Play one greedy game and count how many of each dog type the agent placed.
+/// Evidence of *differentiated* play (Phase 2): a learned agent should field
+/// air-capable dogs against seagulls, not spam one breed.
+pub fn dog_usage(agent: &Dqn, env_cfg: &GameConfig, seed: u64) -> Vec<u32> {
+    let mut env = GardogsEnv::new(env_cfg.clone());
+    let mut obs = env.reset(seed);
+    let mut counts = vec![0u32; env_cfg.dogs.len()];
+    let mut steps = 0u64;
+    loop {
+        let mask = env.action_mask();
+        let a = agent.act_greedy(&obs.data, &mask);
+        // Greedy actions come from the mask, so a chosen placement always succeeds.
+        if let Action::Place { dog, .. } = env.decode(a) {
+            counts[dog] += 1;
+        }
+        let sr = env.step(env.decode(a));
+        obs = sr.obs;
+        steps += 1;
+        if sr.done || steps >= 5_000 {
+            break;
+        }
+    }
+    counts
 }
 
 fn recent_mean(xs: &[f32], window: usize) -> f32 {
