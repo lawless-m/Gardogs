@@ -199,7 +199,12 @@ impl GameConfig {
             // were unaffordable exactly when the postmen arrived, capping play at
             // wave 2. Kill money is richer below to keep the tempo flowing.
             start_money: 200,
-            start_lives: 12,
+            // A tight life budget is what forces *differentiated* defence: with a
+            // big buffer the agent just spams cheap terriers for the cats and
+            // tanks the seagull/postman leaks. Few enough lives that leaking the
+            // airborne and tank threats is fatal makes air-capable dogs (for
+            // seagulls) and mastiffs+collie (for postmen) actually necessary.
+            start_lives: 8,
             breather_s: 4.0,
             dogs: vec![
                 DogSpec {
@@ -335,21 +340,23 @@ impl GameConfig {
                         },
                     ],
                 },
-                // 5: the finale — everything at once, faster.
+                // 5: the finale — everything at once, faster. Hard, but winnable
+                //    with a properly differentiated defence (the tight life budget
+                //    means it can't be tanked).
                 WaveSpec {
                     groups: vec![
                         SpawnGroup {
-                            count: 10,
+                            count: 8,
                             spacing_s: 1.0,
                             ..cat
                         },
                         SpawnGroup {
-                            count: 4,
+                            count: 3,
                             spacing_s: 3.0,
                             ..postman
                         },
                         SpawnGroup {
-                            count: 5,
+                            count: 4,
                             spacing_s: 1.8,
                             start_s: 3.0,
                             ..seagull
