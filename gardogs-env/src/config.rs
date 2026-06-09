@@ -274,7 +274,13 @@ impl GameConfig {
                     movement: Movement::Air,
                     kill_reward: 8.0,
                     kill_money: 18,
-                    lives_cost: 1,
+                    // 03-game-rules.md lists 1, but at 1 the agent just tanks the
+                    // seagulls (cheaper than buying air-capable dogs) and never
+                    // learns an air defence. Costing 2 lives makes leaking the
+                    // airborne threat as punishing as a postman, so German
+                    // Shepherds become necessary — the missing half of the
+                    // differentiated answer.
+                    lives_cost: 2,
                 },
             ],
             waves: vec![
